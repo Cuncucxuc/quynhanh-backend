@@ -4,7 +4,12 @@ let pool;
 
 if (process.env.MYSQL_URL) {
   // Railway: dùng MYSQL_URL connection string
-  pool = mysql.createPool(process.env.MYSQL_URL);
+  pool = mysql.createPool({
+    uri: process.env.MYSQL_URL,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+  });
 } else {
   // Local: dùng các biến riêng lẻ hoặc giá trị mặc định
   pool = mysql.createPool({
@@ -14,7 +19,7 @@ if (process.env.MYSQL_URL) {
     database: process.env.DB_NAME || 'quanlynhansu',
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
   });
 }
 
