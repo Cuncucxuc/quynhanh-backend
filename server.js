@@ -8,6 +8,24 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Auto-migrate: thêm cột photo_url nếu chưa có
+(async () => {
+  try {
+    await db.query(`
+      ALTER TABLE attendance 
+      ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500) DEFAULT NULL
+    `);
+  } catch (e) {
+    // MySQL 5.x không hỗ trợ IF NOT EXISTS, thử cách khác
+    try {
+      const [cols] = await db.query(`SHOW COLUMNS FROM attendance LIKE 'photo_url'`);
+      if (cols.length === 0) {
+        await db.query(`ALTER TABLE attendance ADD COLUMN photo_url VARCHAR(500) DEFAULT NULL`);
+      }
+    } catch (_) {}
+  }
+})();
+
 // API Kiểm tra kết nối
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'Backend Server kết nối MySQL hoạt động bình thường!' });
