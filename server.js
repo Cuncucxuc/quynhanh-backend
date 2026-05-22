@@ -11,18 +11,23 @@ app.use(express.json());
 // Auto-migrate: thêm cột photo_url nếu chưa có
 (async () => {
   try {
-    await db.query(`
-      ALTER TABLE attendance 
-      ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500) DEFAULT NULL
-    `);
-  } catch (e) {
-    // MySQL 5.x không hỗ trợ IF NOT EXISTS, thử cách khác
-    try {
-      const [cols] = await db.query(`SHOW COLUMNS FROM attendance LIKE 'photo_url'`);
-      if (cols.length === 0) {
-        await db.query(`ALTER TABLE attendance ADD COLUMN photo_url VARCHAR(500) DEFAULT NULL`);
+    const [cols] = await db.query(`SHOW COLUMNS FROM attendance`);
+    const colNames = cols.map(c => c.Field);
+    const toAdd = [
+      { name: 'photo_url', def: 'VARCHAR(500) DEFAULT NULL' },
+      { name: 'checkin_time', def: 'DATETIME DEFAULT NULL' },
+      { name: 'checkout_time', def: 'DATETIME DEFAULT NULL' },
+      { name: 'checkin_photo', def: 'VARCHAR(500) DEFAULT NULL' },
+      { name: 'checkout_photo', def: 'VARCHAR(500) DEFAULT NULL' },
+    ];
+    for (const col of toAdd) {
+      if (!colNames.includes(col.name)) {
+        await db.query(`ALTER TABLE attendance ADD COLUMN ${col.name} ${col.def}`);
+        console.log(`✅ Added column: ${col.name}`);
       }
-    } catch (_) {}
+    }
+  } catch (e) {
+    console.error('Migration error:', e.message);
   }
 })();
 
@@ -694,50 +699,123 @@ const upload = multer({
 // Serve ảnh tĩnh
 app.use('/uploads', express.static(uploadsDir));
 
-// Upload ảnh chấm công
+function getBaseUrl(req) {
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+    return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  }
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+// CHECK-IN bằng ảnh
+app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Không có file ảnh' });
+    const { employeeId, date } = req.body;
+    if (!employeeId || !date) return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
+
+    const now = new Date();
+    const checkinHour = now.getHours();
+    // Trước 8h → đúng giờ (present), sau 8h → đi muộn (late)
+    const status = checkinHour < 8 ? 'present' : 'late';
+
+    const photoUrl = `${getBaseUrl(req)}/uploads/${req.file.filename}`;
+
+    await db.query(
+      `INSERT INTO attendance (id, employeeId, date, status, checkin_time, checkin_photo, photo_url)
+       VALUES (?, ?, ?, ?, NOW(), ?, ?)
+       ON DUPLICATE KEY UPDATE 
+         status = ?, checkin_time = NOW(), checkin_photo = ?, photo_url = ?`,
+      [
+        `${employeeId}-${date}`, employeeId, date, status, photoUrl, photoUrl,
+        status, photoUrl, photoUrl
+      ]
+    );
+
+    res.json({
+      success: true,
+      photoUrl,
+      status,
+      checkinTime: now.toISOString(),
+      message: checkinHour < 8
+        ? `Check-in lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} — Đúng giờ ✓`
+        : `Check-in lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} — Đi muộn ⚠️`,
+    });
+  } catch (error) {
+    console.error('Error check-in:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// CHECK-OUT bằng ảnh
+app.post('/api/attendance/checkout', upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Không có file ảnh' });
+    const { employeeId, date } = req.body;
+    if (!employeeId || !date) return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
+
+    const now = new Date();
+    const checkoutHour = now.getHours();
+    // Sau 16h → 1 ngày công, trước 16h → nửa ngày
+    const finalStatus = checkoutHour >= 16 ? 'present' : 'half_day';
+
+    const photoUrl = `${getBaseUrl(req)}/uploads/${req.file.filename}`;
+
+    await db.query(
+      `UPDATE attendance SET 
+         status = ?, checkout_time = NOW(), checkout_photo = ?
+       WHERE employeeId = ? AND date = ?`,
+      [finalStatus, photoUrl, employeeId, date]
+    );
+
+    res.json({
+      success: true,
+      photoUrl,
+      status: finalStatus,
+      checkoutTime: now.toISOString(),
+      message: checkoutHour >= 16
+        ? `Check-out lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} — 1 ngày công ✓`
+        : `Check-out lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} — Nửa ngày công ⚠️`,
+    });
+  } catch (error) {
+    console.error('Error check-out:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Lấy trạng thái check-in/out của nhân viên theo ngày
+app.get('/api/attendance/status/:employeeId/:date', async (req, res) => {
+  try {
+    const { employeeId, date } = req.params;
+    const [rows] = await db.query(
+      `SELECT status, checkin_time, checkout_time, checkin_photo, checkout_photo
+       FROM attendance WHERE employeeId = ? AND date = ?`,
+      [employeeId, date]
+    );
+    if (rows.length > 0) {
+      res.json(rows[0]);
+    } else {
+      res.json({ status: null, checkin_time: null, checkout_time: null });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload ảnh chấm công (legacy - giữ lại tương thích)
 app.post('/api/attendance/photo', upload.single('photo'), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'Không có file ảnh' });
-    }
+    if (!req.file) return res.status(400).json({ error: 'Không có file ảnh' });
     const { employeeId, date } = req.body;
-    if (!employeeId || !date) {
-      return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
-    }
+    if (!employeeId || !date) return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
 
-    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
-      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-      : `http://localhost:${PORT}`;
-    const photoUrl = `${baseUrl}/uploads/${req.file.filename}`;
-
-    // Cập nhật photo_url vào bảng attendance
+    const photoUrl = `${getBaseUrl(req)}/uploads/${req.file.filename}`;
     await db.query(
       `INSERT INTO attendance (id, employeeId, date, status, photo_url)
        VALUES (?, ?, ?, 'present', ?)
        ON DUPLICATE KEY UPDATE status = 'present', photo_url = ?`,
       [`${employeeId}-${date}`, employeeId, date, photoUrl, photoUrl]
     );
-
     res.json({ success: true, photoUrl });
-  } catch (error) {
-    console.error('Error uploading photo:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Lấy ảnh chấm công của nhân viên theo ngày
-app.get('/api/attendance/photo/:employeeId/:date', async (req, res) => {
-  try {
-    const { employeeId, date } = req.params;
-    const [rows] = await db.query(
-      'SELECT photo_url FROM attendance WHERE employeeId = ? AND date = ?',
-      [employeeId, date]
-    );
-    if (rows.length > 0 && rows[0].photo_url) {
-      res.json({ photoUrl: rows[0].photo_url });
-    } else {
-      res.json({ photoUrl: null });
-    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
