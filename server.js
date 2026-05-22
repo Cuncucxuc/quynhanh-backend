@@ -644,6 +644,87 @@ app.get('/api/auth/check-email/:email', async (req, res) => {
   }
 });
 
+// ==========================================
+// UPLOAD ẢNH CHẤM CÔNG
+// ==========================================
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Tạo thư mục uploads nếu chưa có
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `attendance-${unique}.jpg`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Chỉ chấp nhận file ảnh'));
+  },
+});
+
+// Serve ảnh tĩnh
+app.use('/uploads', express.static(uploadsDir));
+
+// Upload ảnh chấm công
+app.post('/api/attendance/photo', upload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Không có file ảnh' });
+    }
+    const { employeeId, date } = req.body;
+    if (!employeeId || !date) {
+      return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
+    }
+
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : `http://localhost:${PORT}`;
+    const photoUrl = `${baseUrl}/uploads/${req.file.filename}`;
+
+    // Cập nhật photo_url vào bảng attendance
+    await db.query(
+      `INSERT INTO attendance (id, employeeId, date, status, photo_url)
+       VALUES (?, ?, ?, 'present', ?)
+       ON DUPLICATE KEY UPDATE status = 'present', photo_url = ?`,
+      [`${employeeId}-${date}`, employeeId, date, photoUrl, photoUrl]
+    );
+
+    res.json({ success: true, photoUrl });
+  } catch (error) {
+    console.error('Error uploading photo:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Lấy ảnh chấm công của nhân viên theo ngày
+app.get('/api/attendance/photo/:employeeId/:date', async (req, res) => {
+  try {
+    const { employeeId, date } = req.params;
+    const [rows] = await db.query(
+      'SELECT photo_url FROM attendance WHERE employeeId = ? AND date = ?',
+      [employeeId, date]
+    );
+    if (rows.length > 0 && rows[0].photo_url) {
+      res.json({ photoUrl: rows[0].photo_url });
+    } else {
+      res.json({ photoUrl: null });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Khởi chạy server
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server API Quynh Anh HR đang chạy tại http://localhost:${PORT}`);
