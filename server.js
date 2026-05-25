@@ -713,32 +713,39 @@ app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => 
     const { employeeId, date } = req.body;
     if (!employeeId || !date) return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
 
-    const now = new Date();
-    const checkinHour = now.getHours();
+    // Giờ Việt Nam UTC+7
+    const nowUTC = new Date();
+    const nowVN = new Date(nowUTC.getTime() + 7 * 60 * 60 * 1000);
+    const checkinHour = nowVN.getUTCHours();
+    const checkinMin = nowVN.getUTCMinutes();
     // Trước 8h → đúng giờ (present), sau 8h → đi muộn (late)
     const status = checkinHour < 8 ? 'present' : 'late';
+
+    // Format datetime cho MySQL (YYYY-MM-DD HH:MM:SS) theo giờ VN
+    const vnDatetime = nowVN.toISOString().replace('T', ' ').substring(0, 19);
 
     const photoUrl = `${getBaseUrl(req)}/uploads/${req.file.filename}`;
 
     await db.query(
       `INSERT INTO attendance (id, employeeId, date, status, checkin_time, checkin_photo, photo_url)
-       VALUES (?, ?, ?, ?, NOW(), ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE 
-         status = ?, checkin_time = NOW(), checkin_photo = ?, photo_url = ?`,
+         status = ?, checkin_time = ?, checkin_photo = ?, photo_url = ?`,
       [
-        `${employeeId}-${date}`, employeeId, date, status, photoUrl, photoUrl,
-        status, photoUrl, photoUrl
+        `${employeeId}-${date}`, employeeId, date, status, vnDatetime, photoUrl, photoUrl,
+        status, vnDatetime, photoUrl, photoUrl
       ]
     );
 
+    const timeStr = `${String(checkinHour).padStart(2,'0')}:${String(checkinMin).padStart(2,'0')}`;
     res.json({
       success: true,
       photoUrl,
       status,
-      checkinTime: now.toISOString(),
+      checkinTime: vnDatetime,
       message: checkinHour < 8
-        ? `Check-in lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} — Đúng giờ ✓`
-        : `Check-in lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} — Đi muộn ⚠️`,
+        ? `Check-in lúc ${timeStr} — Đúng giờ ✓`
+        : `Check-in lúc ${timeStr} — Đi muộn ⚠️`,
     });
   } catch (error) {
     console.error('Error check-in:', error);
@@ -753,28 +760,33 @@ app.post('/api/attendance/checkout', upload.single('photo'), async (req, res) =>
     const { employeeId, date } = req.body;
     if (!employeeId || !date) return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
 
-    const now = new Date();
-    const checkoutHour = now.getHours();
+    // Giờ Việt Nam UTC+7
+    const nowUTC = new Date();
+    const nowVN = new Date(nowUTC.getTime() + 7 * 60 * 60 * 1000);
+    const checkoutHour = nowVN.getUTCHours();
+    const checkoutMin = nowVN.getUTCMinutes();
     // Sau 16h → 1 ngày công, trước 16h → nửa ngày
     const finalStatus = checkoutHour >= 16 ? 'present' : 'half_day';
 
+    const vnDatetime = nowVN.toISOString().replace('T', ' ').substring(0, 19);
     const photoUrl = `${getBaseUrl(req)}/uploads/${req.file.filename}`;
 
     await db.query(
       `UPDATE attendance SET 
-         status = ?, checkout_time = NOW(), checkout_photo = ?
+         status = ?, checkout_time = ?, checkout_photo = ?
        WHERE employeeId = ? AND date = ?`,
-      [finalStatus, photoUrl, employeeId, date]
+      [finalStatus, vnDatetime, photoUrl, employeeId, date]
     );
 
+    const timeStr = `${String(checkoutHour).padStart(2,'0')}:${String(checkoutMin).padStart(2,'0')}`;
     res.json({
       success: true,
       photoUrl,
       status: finalStatus,
-      checkoutTime: now.toISOString(),
+      checkoutTime: vnDatetime,
       message: checkoutHour >= 16
-        ? `Check-out lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} — 1 ngày công ✓`
-        : `Check-out lúc ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} — Nửa ngày công ⚠️`,
+        ? `Check-out lúc ${timeStr} — 1 ngày công ✓`
+        : `Check-out lúc ${timeStr} — Nửa ngày công ⚠️`,
     });
   } catch (error) {
     console.error('Error check-out:', error);
