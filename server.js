@@ -8,23 +8,37 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Auto-migrate: thêm cột photo_url nếu chưa có
+// Auto-migrate: thêm các cột cần thiết cho chấm công ảnh và trạng thái việc
 (async () => {
   try {
-    const [cols] = await db.query(`SHOW COLUMNS FROM attendance`);
-    const colNames = cols.map(c => c.Field);
-    const toAdd = [
+    const [attendanceCols] = await db.query(`SHOW COLUMNS FROM attendance`);
+    const attendanceColNames = attendanceCols.map(c => c.Field);
+    const attendanceToAdd = [
       { name: 'photo_url', def: 'VARCHAR(500) DEFAULT NULL' },
       { name: 'checkin_time', def: 'DATETIME DEFAULT NULL' },
       { name: 'checkout_time', def: 'DATETIME DEFAULT NULL' },
       { name: 'checkin_photo', def: 'VARCHAR(500) DEFAULT NULL' },
       { name: 'checkout_photo', def: 'VARCHAR(500) DEFAULT NULL' },
     ];
-    for (const col of toAdd) {
-      if (!colNames.includes(col.name)) {
+    for (const col of attendanceToAdd) {
+      if (!attendanceColNames.includes(col.name)) {
         await db.query(`ALTER TABLE attendance ADD COLUMN ${col.name} ${col.def}`);
         console.log(`✅ Added column: ${col.name}`);
       }
+    }
+
+    const [noteCols] = await db.query(`SHOW COLUMNS FROM work_notes`);
+    const noteColNames = noteCols.map(c => c.Field);
+    if (!noteColNames.includes('completedByEmployee')) {
+      await db.query(`ALTER TABLE work_notes ADD COLUMN completedByEmployee TINYINT(1) NOT NULL DEFAULT 0`);
+      console.log('✅ Added column: completedByEmployee');
+    }
+
+    const [employeeCols] = await db.query(`SHOW COLUMNS FROM employees`);
+    const employeeColNames = employeeCols.map(c => c.Field);
+    if (!employeeColNames.includes('profileData')) {
+      await db.query(`ALTER TABLE employees ADD COLUMN profileData TEXT NULL`);
+      console.log('Added column: profileData');
     }
   } catch (e) {
     console.error('Migration error:', e.message);
@@ -47,7 +61,8 @@ app.get('/api/employees', async (req, res) => {
     // Chuyển đổi weeklySchedule từ JSON string thành object trước khi gửi về client
     const employees = rows.map(emp => ({
       ...emp,
-      weeklySchedule: emp.weeklySchedule ? JSON.parse(emp.weeklySchedule) : null
+      weeklySchedule: emp.weeklySchedule ? JSON.parse(emp.weeklySchedule) : null,
+      profileFields: emp.profileData ? JSON.parse(emp.profileData) : {}
     }));
     res.json(employees);
   } catch (error) {
@@ -60,13 +75,14 @@ app.get('/api/employees', async (req, res) => {
 app.post('/api/employees', async (req, res) => {
   const emp = req.body;
   const scheduleStr = emp.weeklySchedule ? JSON.stringify(emp.weeklySchedule) : null;
+  const profileDataStr = emp.profileFields ? JSON.stringify(emp.profileFields) : null;
   const joinDate = emp.joinDate ? new Date(emp.joinDate) : new Date();
 
   const query = `
     INSERT INTO employees (
       id, employeeCode, fullName, gender, email, phone, address, 
-      department, position, joinDate, salary, bonus, penalty, notes, weeklySchedule
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      department, position, joinDate, salary, bonus, penalty, notes, weeklySchedule, profileData
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       employeeCode = VALUES(employeeCode),
       fullName = VALUES(fullName),
@@ -81,13 +97,14 @@ app.post('/api/employees', async (req, res) => {
       bonus = VALUES(bonus),
       penalty = VALUES(penalty),
       notes = VALUES(notes),
-      weeklySchedule = VALUES(weeklySchedule)
+      weeklySchedule = VALUES(weeklySchedule),
+      profileData = VALUES(profileData)
   `;
 
   const values = [
     emp.id, emp.employeeCode, emp.fullName, emp.gender, emp.email, emp.phone, emp.address,
     emp.department, emp.position, joinDate, emp.salary, emp.bonus || 0, emp.penalty || 0,
-    emp.notes || null, scheduleStr
+    emp.notes || null, scheduleStr, profileDataStr
   ];
 
   try {
@@ -151,7 +168,7 @@ app.put('/api/departments', async (req, res) => {
   if (!oldName || !newName) {
     return res.status(400).json({ error: 'Thiếu tên phòng ban cũ hoặc mới' });
   }
-  
+
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -227,21 +244,23 @@ app.get('/api/notes', async (req, res) => {
 app.post('/api/notes', async (req, res) => {
   const note = req.body;
   const noteDate = note.date ? new Date(note.date) : new Date();
+  const completedByEmployee = note.completedByEmployee ? 1 : 0;
 
   const query = `
-    INSERT INTO work_notes (id, title, description, date, employeeId, department)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO work_notes (id, title, description, date, employeeId, department, completedByEmployee)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON DUPLICATE KEY UPDATE
       title = VALUES(title),
       description = VALUES(description),
       date = VALUES(date),
       employeeId = VALUES(employeeId),
-      department = VALUES(department)
+      department = VALUES(department),
+      completedByEmployee = VALUES(completedByEmployee)
   `;
 
   const values = [
     note.id, note.title, note.description, noteDate,
-    note.employeeId || null, note.department || null
+    note.employeeId || null, note.department || null, completedByEmployee
   ];
 
   try {
@@ -426,6 +445,22 @@ app.patch('/api/leave-requests/:id/review', async (req, res) => {
   }
 });
 
+// Xóa đơn nghỉ phép (admin hoặc nhân viên xóa đơn pending của mình)
+app.delete('/api/leave-requests/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [existing] = await db.query('SELECT * FROM leave_requests WHERE id = ?', [id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Không tìm thấy đơn nghỉ phép' });
+    }
+    await db.query('DELETE FROM leave_requests WHERE id = ?', [id]);
+    res.json({ success: true, message: 'Đã xóa đơn nghỉ phép' });
+  } catch (error) {
+    console.error('Error deleting leave request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ==========================================
 // 6. ĐỒNG BỘ TOÀN BỘ BACKUP / RESTORE
 // ==========================================
@@ -450,13 +485,14 @@ app.post('/api/sync/import', async (req, res) => {
       for (const empJsonStr of Object.values(employees)) {
         const emp = JSON.parse(empJsonStr);
         const scheduleStr = emp.weeklySchedule ? JSON.stringify(emp.weeklySchedule) : null;
+        const profileDataStr = emp.profileFields ? JSON.stringify(emp.profileFields) : null;
         const joinDate = emp.joinDate ? new Date(emp.joinDate) : new Date();
 
         const query = `
           INSERT INTO employees (
-            id, employeeCode, fullName, gender, email, phone, address, 
-            department, position, joinDate, salary, bonus, penalty, notes, weeklySchedule
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, employeeCode, fullName, gender, email, phone, address,
+            department, position, joinDate, salary, bonus, penalty, notes, weeklySchedule, profileData
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE
             employeeCode = VALUES(employeeCode),
             fullName = VALUES(fullName),
@@ -471,12 +507,13 @@ app.post('/api/sync/import', async (req, res) => {
             bonus = VALUES(bonus),
             penalty = VALUES(penalty),
             notes = VALUES(notes),
-            weeklySchedule = VALUES(weeklySchedule)
+            weeklySchedule = VALUES(weeklySchedule),
+            profileData = VALUES(profileData)
         `;
         await connection.query(query, [
           emp.id, emp.employeeCode, emp.fullName, emp.gender, emp.email, emp.phone, emp.address,
           emp.department, emp.position, joinDate, emp.salary, emp.bonus || 0, emp.penalty || 0,
-          emp.notes || null, scheduleStr
+          emp.notes || null, scheduleStr, profileDataStr
         ]);
       }
     }
@@ -595,8 +632,8 @@ app.post('/api/auth/register', async (req, res) => {
         const empId = `emp_${Date.now()}`;
         const empCode = `NV_${Math.floor(Math.random() * 10000)}`;
         await connection.query(
-          `INSERT INTO employees 
-           (id, employeeCode, fullName, gender, email, phone, address, department, position, joinDate, salary, bonus, penalty, notes) 
+          `INSERT INTO employees
+           (id, employeeCode, fullName, gender, email, phone, address, department, position, joinDate, salary, bonus, penalty, notes)
            VALUES (?, ?, ?, 'Nam', ?, '', '', ?, 'Nhân viên', NOW(), 0.0, 0.0, 0.0, '')`,
           [empId, empCode, fullName, normalizedEmail, deptName]
         );
@@ -706,44 +743,47 @@ function getBaseUrl(req) {
   return `${req.protocol}://${req.get('host')}`;
 }
 
+function getVnDateParts(date = new Date()) {
+  const vn = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  return {
+    dateKey: vn.toISOString().slice(0, 10),
+    dateTime: vn.toISOString().replace('T', ' ').substring(0, 19),
+    hour: vn.getUTCHours(),
+    minute: vn.getUTCMinutes(),
+  };
+}
+
 // CHECK-IN bằng ảnh
 app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Không có file ảnh' });
-    const { employeeId, date } = req.body;
-    if (!employeeId || !date) return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
+    const { employeeId } = req.body;
+    if (!employeeId) return res.status(400).json({ error: 'Thiếu employeeId' });
 
-    // Giờ Việt Nam UTC+7
-    const nowUTC = new Date();
-    const nowVN = new Date(nowUTC.getTime() + 7 * 60 * 60 * 1000);
-    const checkinHour = nowVN.getUTCHours();
-    const checkinMin = nowVN.getUTCMinutes();
-    // Trước 8h → đúng giờ (present), sau 8h → đi muộn (late)
-    const status = checkinHour < 8 ? 'present' : 'late';
-
-    // Format datetime cho MySQL (YYYY-MM-DD HH:MM:SS) theo giờ VN
-    const vnDatetime = nowVN.toISOString().replace('T', ' ').substring(0, 19);
-
+    const { dateKey, dateTime, hour, minute } = getVnDateParts();
+    const status = hour < 8 ? 'present' : 'late';
     const photoUrl = `${getBaseUrl(req)}/uploads/${req.file.filename}`;
+    const attendanceId = `${employeeId}_${dateKey}`;
 
     await db.query(
       `INSERT INTO attendance (id, employeeId, date, status, checkin_time, checkin_photo, photo_url)
        VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE 
-         status = ?, checkin_time = ?, checkin_photo = ?, photo_url = ?`,
-      [
-        `${employeeId}-${date}`, employeeId, date, status, vnDatetime, photoUrl, photoUrl,
-        status, vnDatetime, photoUrl, photoUrl
-      ]
+       ON DUPLICATE KEY UPDATE
+         status = VALUES(status),
+         checkin_time = VALUES(checkin_time),
+         checkin_photo = VALUES(checkin_photo),
+         photo_url = VALUES(photo_url)`,
+      [attendanceId, employeeId, dateKey, status, dateTime, photoUrl, photoUrl]
     );
 
-    const timeStr = `${String(checkinHour).padStart(2,'0')}:${String(checkinMin).padStart(2,'0')}`;
+    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
     res.json({
       success: true,
       photoUrl,
       status,
-      checkinTime: vnDatetime,
-      message: checkinHour < 8
+      date: dateKey,
+      checkinTime: dateTime,
+      message: hour < 8
         ? `Check-in lúc ${timeStr} — Đúng giờ ✓`
         : `Check-in lúc ${timeStr} — Đi muộn ⚠️`,
     });
@@ -757,34 +797,29 @@ app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => 
 app.post('/api/attendance/checkout', upload.single('photo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Không có file ảnh' });
-    const { employeeId, date } = req.body;
-    if (!employeeId || !date) return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
+    const { employeeId } = req.body;
+    if (!employeeId) return res.status(400).json({ error: 'Thiếu employeeId' });
 
-    // Giờ Việt Nam UTC+7
-    const nowUTC = new Date();
-    const nowVN = new Date(nowUTC.getTime() + 7 * 60 * 60 * 1000);
-    const checkoutHour = nowVN.getUTCHours();
-    const checkoutMin = nowVN.getUTCMinutes();
-    // Sau 16h → 1 ngày công, trước 16h → nửa ngày
-    const finalStatus = checkoutHour >= 16 ? 'present' : 'half_day';
-
-    const vnDatetime = nowVN.toISOString().replace('T', ' ').substring(0, 19);
+    const { dateKey, dateTime, hour, minute } = getVnDateParts();
+    const finalStatus = hour >= 16 ? 'present' : 'half_day';
     const photoUrl = `${getBaseUrl(req)}/uploads/${req.file.filename}`;
+    const attendanceId = `${employeeId}_${dateKey}`;
 
     await db.query(
-      `UPDATE attendance SET 
-         status = ?, checkout_time = ?, checkout_photo = ?
-       WHERE employeeId = ? AND date = ?`,
-      [finalStatus, vnDatetime, photoUrl, employeeId, date]
+      `UPDATE attendance SET
+         status = ?, checkout_time = ?, checkout_photo = ?, photo_url = ?
+       WHERE id = ? AND employeeId = ? AND date = ?`,
+      [finalStatus, dateTime, photoUrl, photoUrl, attendanceId, employeeId, dateKey]
     );
 
-    const timeStr = `${String(checkoutHour).padStart(2,'0')}:${String(checkoutMin).padStart(2,'0')}`;
+    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
     res.json({
       success: true,
       photoUrl,
       status: finalStatus,
-      checkoutTime: vnDatetime,
-      message: checkoutHour >= 16
+      date: dateKey,
+      checkoutTime: dateTime,
+      message: hour >= 16
         ? `Check-out lúc ${timeStr} — 1 ngày công ✓`
         : `Check-out lúc ${timeStr} — Nửa ngày công ⚠️`,
     });
@@ -804,10 +839,52 @@ app.get('/api/attendance/status/:employeeId/:date', async (req, res) => {
       [employeeId, date]
     );
     if (rows.length > 0) {
-      res.json(rows[0]);
+      const row = rows[0];
+      const formatVN = (dt) => {
+        if (!dt) return null;
+        if (typeof dt === 'string') return dt;
+        const vnDate = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
+        return vnDate.toISOString().replace('T', ' ').substring(0, 19);
+      };
+      res.json({
+        status: row.status,
+        checkin_time: formatVN(row.checkin_time),
+        checkout_time: formatVN(row.checkout_time),
+        checkin_photo: row.checkin_photo,
+        checkout_photo: row.checkout_photo,
+      });
     } else {
       res.json({ status: null, checkin_time: null, checkout_time: null });
     }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/attendance/history/:employeeId', async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const [rows] = await db.query(
+      `SELECT date, status, checkin_time, checkout_time, checkin_photo, checkout_photo
+       FROM attendance
+       WHERE employeeId = ?
+       ORDER BY date DESC`,
+      [employeeId]
+    );
+    const formatVN = (dt) => {
+      if (!dt) return null;
+      if (typeof dt === 'string') return dt;
+      const vnDate = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
+      return vnDate.toISOString().replace('T', ' ').substring(0, 19);
+    };
+    res.json(rows.map((row) => ({
+      date: row.date instanceof Date ? row.date.toISOString().slice(0, 10) : String(row.date).slice(0, 10),
+      status: row.status,
+      checkin_time: formatVN(row.checkin_time),
+      checkout_time: formatVN(row.checkout_time),
+      checkin_photo: row.checkin_photo,
+      checkout_photo: row.checkout_photo,
+    })));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -817,17 +894,20 @@ app.get('/api/attendance/status/:employeeId/:date', async (req, res) => {
 app.post('/api/attendance/photo', upload.single('photo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Không có file ảnh' });
-    const { employeeId, date } = req.body;
-    if (!employeeId || !date) return res.status(400).json({ error: 'Thiếu employeeId hoặc date' });
+    const { employeeId } = req.body;
+    if (!employeeId) return res.status(400).json({ error: 'Thiếu employeeId' });
 
+    const { dateKey } = getVnDateParts();
     const photoUrl = `${getBaseUrl(req)}/uploads/${req.file.filename}`;
+    const attendanceId = `${employeeId}_${dateKey}`;
+
     await db.query(
       `INSERT INTO attendance (id, employeeId, date, status, photo_url)
        VALUES (?, ?, ?, 'present', ?)
-       ON DUPLICATE KEY UPDATE status = 'present', photo_url = ?`,
-      [`${employeeId}-${date}`, employeeId, date, photoUrl, photoUrl]
+       ON DUPLICATE KEY UPDATE photo_url = VALUES(photo_url)` ,
+      [attendanceId, employeeId, dateKey, photoUrl]
     );
-    res.json({ success: true, photoUrl });
+    res.json({ success: true, photoUrl, date: dateKey });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
