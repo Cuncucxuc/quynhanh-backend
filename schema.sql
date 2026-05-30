@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS employees (
     penalty DOUBLE NOT NULL DEFAULT 0.0,
     notes TEXT NULL,
     weeklySchedule TEXT NULL, -- Lưu trữ dưới dạng JSON String (ví dụ: {"Monday": "08:00 - 17:00", ...})
+    profileData TEXT NULL, -- Luu ho so nhan vien mo rong dang JSON
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (department) REFERENCES departments(name) ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
