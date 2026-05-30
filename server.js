@@ -19,7 +19,7 @@ app.use(express.json());
 
 
 
-// Auto-migrate: thm cc ct cn thit cho chm cng nh v trng thi vic
+// Auto-migrate: them cac cot can thiet cho cham cong anh va trang thai viec
 
 (async () => {
 
@@ -93,11 +93,11 @@ app.use(express.json());
 
 
 
-// API Kim tra kt ni
+// API Kiem tra ket noi
 
 app.get('/api/health', (req, res) => {
 
-  res.json({ status: 'OK', message: 'Backend Server kt ni MySQL hot ng bnh thng!' });
+  res.json({ status: 'OK', message: 'Backend Server ket noi MySQL hoat dong binh thuong!' });
 
 });
 
@@ -105,13 +105,13 @@ app.get('/api/health', (req, res) => {
 
 // ==========================================
 
-// 1. APIs CHO NHN VIN (EMPLOYEES)
+// 1. APIs CHO NHAN VIEN (EMPLOYEES)
 
 // ==========================================
 
 
 
-// Ly danh sch tt c nhn vin
+// Lay danh sach tat ca nhan vien
 
 app.get('/api/employees', async (req, res) => {
 
@@ -119,7 +119,7 @@ app.get('/api/employees', async (req, res) => {
 
     const [rows] = await db.query('SELECT * FROM employees');
 
-    // Chuyn i weeklySchedule t JSON string thnh object trc khi gi v client
+    // Chuyen doi weeklySchedule tu JSON string thanh object truoc khi gui ve client
 
     const employees = rows.map(emp => ({
 
@@ -145,7 +145,7 @@ app.get('/api/employees', async (req, res) => {
 
 
 
-// Thm hoc cp nht mt nhn vin (INSERT ... ON DUPLICATE KEY UPDATE)
+// Them hoac cap nhat mot nhan vien (INSERT ... ON DUPLICATE KEY UPDATE)
 
 app.post('/api/employees', async (req, res) => {
 
@@ -219,7 +219,7 @@ app.post('/api/employees', async (req, res) => {
 
   try {
 
-    // m bo phng ban tn ti trc khi chn nhn vin  trnh li kha ngoi
+    // Dam bao phong ban ton tai truoc khi chen nhan vien de tranh loi khoa ngoai
 
     await db.query('INSERT IGNORE INTO departments (name) VALUES (?)', [emp.department]);
 
@@ -227,7 +227,7 @@ app.post('/api/employees', async (req, res) => {
 
     await db.query(query, values);
 
-    res.json({ success: true, message: 'Lu thng tin nhn vin thnh cng!' });
+    res.json({ success: true, message: 'Luu thong tin nhan vien thanh cong!' });
 
   } catch (error) {
 
@@ -241,7 +241,7 @@ app.post('/api/employees', async (req, res) => {
 
 
 
-// Xa nhn vin
+// Xoa nhan vien
 
 app.delete('/api/employees/:id', async (req, res) => {
 
@@ -251,7 +251,7 @@ app.delete('/api/employees/:id', async (req, res) => {
 
     await db.query('DELETE FROM employees WHERE id = ?', [id]);
 
-    res.json({ success: true, message: 'Xa nhn vin thnh cng!' });
+    res.json({ success: true, message: 'Xoa nhan vien thanh cong!' });
 
   } catch (error) {
 
@@ -269,13 +269,13 @@ app.delete('/api/employees/:id', async (req, res) => {
 
 // ==========================================
 
-// 2. APIs CHO PHNG BAN (DEPARTMENTS)
+// 2. APIs CHO PHONG BAN (DEPARTMENTS)
 
 // ==========================================
 
 
 
-// Ly danh sch tt c phng ban
+// Lay danh sach tat ca phong ban
 
 app.get('/api/departments', async (req, res) => {
 
@@ -297,7 +297,7 @@ app.get('/api/departments', async (req, res) => {
 
 
 
-// Thm phng ban mi
+// Them phong ban moi
 
 app.post('/api/departments', async (req, res) => {
 
@@ -305,7 +305,7 @@ app.post('/api/departments', async (req, res) => {
 
   if (!name || name.trim() === '') {
 
-    return res.status(400).json({ error: 'Tn phng ban khng c trng' });
+    return res.status(400).json({ error: 'Ten phong ban khong duoc trong' });
 
   }
 
@@ -313,7 +313,7 @@ app.post('/api/departments', async (req, res) => {
 
     await db.query('INSERT IGNORE INTO departments (name) VALUES (?)', [name.trim()]);
 
-    res.json({ success: true, message: 'Thm phng ban thnh cng!' });
+    res.json({ success: true, message: 'Them phong ban thanh cong!' });
 
   } catch (error) {
 
@@ -327,7 +327,7 @@ app.post('/api/departments', async (req, res) => {
 
 
 
-// Cp nht tn phng ban
+// Cap nhat ten phong ban
 
 app.put('/api/departments', async (req, res) => {
 
@@ -335,7 +335,7 @@ app.put('/api/departments', async (req, res) => {
 
   if (!oldName || !newName) {
 
-    return res.status(400).json({ error: 'Thiu tn phng ban c hoc mi' });
+    return res.status(400).json({ error: 'Thieu ten phong ban cu hoac moi' });
 
   }
 
@@ -349,7 +349,7 @@ app.put('/api/departments', async (req, res) => {
 
 
 
-    // Thm phng ban mi nu cha c
+    // Them phong ban moi nu cha c
 
     await connection.query('INSERT IGNORE INTO departments (name) VALUES (?)', [newName]);
 
@@ -367,7 +367,7 @@ app.put('/api/departments', async (req, res) => {
 
 
 
-    // Xa phng ban c (nu khng phi l phng ban mi)
+    // Xoa phong ban c (nu khng phi l phng ban mi)
 
     if (oldName !== newName) {
 
@@ -379,7 +379,7 @@ app.put('/api/departments', async (req, res) => {
 
     await connection.commit();
 
-    res.json({ success: true, message: 'Cp nht phng ban thnh cng!' });
+    res.json({ success: true, message: 'Cap nhat phong ban thanh cong!' });
 
   } catch (error) {
 
@@ -399,7 +399,7 @@ app.put('/api/departments', async (req, res) => {
 
 
 
-// Xa phng ban
+// Xoa phong ban
 
 app.delete('/api/departments/:name', async (req, res) => {
 
@@ -413,17 +413,17 @@ app.delete('/api/departments/:name', async (req, res) => {
 
 
 
-    // Chuyn ton b nhn vin  phng ban ny v phng ban 'Mc nh'
+    // Chuyn ton b nhn vin  phng ban ny v phng ban 'Mac dinh'
 
-    await connection.query('INSERT IGNORE INTO departments (name) VALUES (?)', ['Mc nh']);
+    await connection.query('INSERT IGNORE INTO departments (name) VALUES (?)', ['Mac dinh']);
 
-    await connection.query('UPDATE employees SET department = ? WHERE department = ?', ['Mc nh', name]);
+    await connection.query('UPDATE employees SET department = ? WHERE department = ?', ['Mac dinh', name]);
 
-    await connection.query('UPDATE work_notes SET department = ? WHERE department = ?', ['Mc nh', name]);
+    await connection.query('UPDATE work_notes SET department = ? WHERE department = ?', ['Mac dinh', name]);
 
 
 
-    // Xa phng ban
+    // Xoa phong ban
 
     await connection.query('DELETE FROM departments WHERE name = ?', [name]);
 
@@ -431,7 +431,7 @@ app.delete('/api/departments/:name', async (req, res) => {
 
     await connection.commit();
 
-    res.json({ success: true, message: 'Xa phng ban thnh cng!' });
+    res.json({ success: true, message: 'Xoa phong ban thanh cong!' });
 
   } catch (error) {
 
@@ -455,13 +455,13 @@ app.delete('/api/departments/:name', async (req, res) => {
 
 // ==========================================
 
-// 3. APIs CHO GHI CH (WORK NOTES)
+// 3. APIs CHO GHI CHU (WORK NOTES)
 
 // ==========================================
 
 
 
-// Ly danh sch tt c ghi ch
+// Lay danh sach tat ca ghi chu
 
 app.get('/api/notes', async (req, res) => {
 
@@ -483,7 +483,7 @@ app.get('/api/notes', async (req, res) => {
 
 
 
-// Thm hoc cp nht mt ghi ch
+// Them hoac cap nhat mot ghi chu
 
 app.post('/api/notes', async (req, res) => {
 
@@ -533,7 +533,7 @@ app.post('/api/notes', async (req, res) => {
 
     await db.query(query, values);
 
-    res.json({ success: true, message: 'Lu ghi ch thnh cng!' });
+    res.json({ success: true, message: 'Luu ghi chu thanh cong!' });
 
   } catch (error) {
 
@@ -547,7 +547,7 @@ app.post('/api/notes', async (req, res) => {
 
 
 
-// Xa ghi ch
+// Xoa ghi chu
 
 app.delete('/api/notes/:id', async (req, res) => {
 
@@ -557,7 +557,7 @@ app.delete('/api/notes/:id', async (req, res) => {
 
     await db.query('DELETE FROM work_notes WHERE id = ?', [id]);
 
-    res.json({ success: true, message: 'Xa ghi ch thnh cng!' });
+    res.json({ success: true, message: 'Xoa ghi chu thanh cong!' });
 
   } catch (error) {
 
@@ -575,13 +575,13 @@ app.delete('/api/notes/:id', async (req, res) => {
 
 // ==========================================
 
-// 4. APIs CHO IM DANH (ATTENDANCE)
+// 4. APIs CHO DIEM DANH (ATTENDANCE)
 
 // ==========================================
 
 
 
-// Ly ton b d liu im danh
+// Lay toan bo du lieu diem danh
 
 app.get('/api/attendance', async (req, res) => {
 
@@ -623,7 +623,7 @@ app.get('/api/attendance', async (req, res) => {
 
 
 
-// Lu thng tin im danh cho mt ngy c th
+// Luu thong tin diem danh cho mot ngay cu the
 
 // Body: { "date": "2026-05-17", "attendance": { "emp_id_1": "present", "emp_id_2": "absent" } }
 
@@ -633,7 +633,7 @@ app.post('/api/attendance', async (req, res) => {
 
   if (!date || !attendance) {
 
-    return res.status(400).json({ error: 'Thiu thng tin ngy hoc danh sch im danh' });
+    return res.status(400).json({ error: 'Thieu thong tin ngay hoac danh sach diem danh' });
 
   }
 
@@ -671,7 +671,7 @@ app.post('/api/attendance', async (req, res) => {
 
     await connection.commit();
 
-    res.json({ success: true, message: 'Lu im danh thnh cng!' });
+    res.json({ success: true, message: 'Luu diem danh thanh cong!' });
 
   } catch (error) {
 
@@ -695,7 +695,7 @@ app.post('/api/attendance', async (req, res) => {
 
 // ==========================================
 
-// 5. N NGH PHP (LEAVE REQUESTS)
+// 5. DON NGHI PHEP (LEAVE REQUESTS)
 
 // ==========================================
 
@@ -759,13 +759,13 @@ app.post('/api/leave-requests', async (req, res) => {
 
   if (!employeeId || !employeeName || !startDate || !endDate || !reason) {
 
-    return res.status(400).json({ error: 'Vui lng in y  thng tin n ngh php' });
+    return res.status(400).json({ error: 'Vui long dien day du thong tin don nghi phep' });
 
   }
 
   if (new Date(endDate) < new Date(startDate)) {
 
-    return res.status(400).json({ error: 'Ngy kt thc phi sau hoc bng ngy bt u' });
+    return res.status(400).json({ error: 'Ngay ket thuc phai sau hoac bang ngay bat dau' });
 
   }
 
@@ -789,7 +789,7 @@ app.post('/api/leave-requests', async (req, res) => {
 
         requestId, employeeId, employeeName, employeeEmail || '',
 
-        department || 'Mc nh', leaveType || 'Ngh php nm',
+        department || 'Mac dinh', leaveType || 'Nghi phep nam',
 
         startDate, endDate, reason,
 
@@ -823,13 +823,13 @@ app.patch('/api/leave-requests/:id/review', async (req, res) => {
 
   if (!adminEmail || !status) {
 
-    return res.status(400).json({ error: 'Thiu thng tin duyt n' });
+    return res.status(400).json({ error: 'Thieu thong tin duyet don' });
 
   }
 
   if (!['approved', 'rejected'].includes(status)) {
 
-    return res.status(400).json({ error: 'Trng thi duyt khng hp l' });
+    return res.status(400).json({ error: 'Trang thai duyet khong hop le' });
 
   }
 
@@ -841,7 +841,7 @@ app.patch('/api/leave-requests/:id/review', async (req, res) => {
 
     if (admins.length === 0 || admins[0].role !== 'admin') {
 
-      return res.status(403).json({ error: 'Ch qun l mi c duyt n' });
+      return res.status(403).json({ error: 'Chi quan ly moi duoc duyet don' });
 
     }
 
@@ -851,13 +851,13 @@ app.patch('/api/leave-requests/:id/review', async (req, res) => {
 
     if (existing.length === 0) {
 
-      return res.status(404).json({ error: 'Khng tm thy n ngh php' });
+      return res.status(404).json({ error: 'Khong tim thay don nghi phep' });
 
     }
 
     if (existing[0].status !== 'pending') {
 
-      return res.status(400).json({ error: 'n ny  c x l trc' });
+      return res.status(400).json({ error: 'Don nay da duoc xu ly truoc do' });
 
     }
 
@@ -893,7 +893,7 @@ app.patch('/api/leave-requests/:id/review', async (req, res) => {
 
 
 
-// Xa n ngh php (admin hoc nhn vin xa n pending ca mnh)
+// Xoa don nghi phep
 
 app.delete('/api/leave-requests/:id', async (req, res) => {
 
@@ -905,13 +905,13 @@ app.delete('/api/leave-requests/:id', async (req, res) => {
 
     if (existing.length === 0) {
 
-      return res.status(404).json({ error: 'Khng tm thy n ngh php' });
+      return res.status(404).json({ error: 'Khong tim thay don nghi phep' });
 
     }
 
     await db.query('DELETE FROM leave_requests WHERE id = ?', [id]);
 
-    res.json({ success: true, message: 'xa n ngh php' });
+    res.json({ success: true, message: 'Da xoa don nghi phep' });
 
   } catch (error) {
 
@@ -927,13 +927,13 @@ app.delete('/api/leave-requests/:id', async (req, res) => {
 
 // ==========================================
 
-// 6. NG B TON B BACKUP / RESTORE
+// 6. DONG BO TOAN BO BACKUP / RESTORE
 
 // ==========================================
 
 
 
-// Nhp/ng b ha ton b d liu t Client (Khi khi ng app ln u hoc nhn ng b)
+// Nhap/Dong bo hoa toan bo du lieu tu Client
 
 app.post('/api/sync/import', async (req, res) => {
 
@@ -1119,7 +1119,7 @@ app.post('/api/sync/import', async (req, res) => {
 
     await connection.commit();
 
-    res.json({ success: true, message: 'ng b ha d liu t Client thnh cng!' });
+    res.json({ success: true, message: 'Dong bo hoa du lieu tu Client thanh cong!' });
 
   } catch (error) {
 
@@ -1141,13 +1141,13 @@ app.post('/api/sync/import', async (req, res) => {
 
 // ==========================================
 
-// 6. APIs H THNG XC THC (AUTHENTICATION)
+// 7. APIs HE THONG XAC THUC (AUTHENTICATION)
 
 // ==========================================
 
 
 
-// Qun l to ti khon ng nhp cho nhn vin (nhn vin khng t ng k)
+// Quan ly tao tai khoan dang nhap cho nhan vien
 
 app.post('/api/auth/register', async (req, res) => {
 
@@ -1155,13 +1155,13 @@ app.post('/api/auth/register', async (req, res) => {
 
   if (!email || !password || !fullName) {
 
-    return res.status(400).json({ error: 'Vui lng in y  thng tin' });
+    return res.status(400).json({ error: 'Vui long dien day du thong tin' });
 
   }
 
   if (!adminEmail) {
 
-    return res.status(403).json({ error: 'Ch qun l mi c to ti khon cho nhn vin' });
+    return res.status(403).json({ error: 'Chi quan ly moi duoc tao tai khoan cho nhan vien' });
 
   }
 
@@ -1187,7 +1187,7 @@ app.post('/api/auth/register', async (req, res) => {
 
       await connection.rollback();
 
-      return res.status(403).json({ error: 'Bn khng c quyn to ti khon' });
+      return res.status(403).json({ error: 'Ban khong co quyen tao tai khoan' });
 
     }
 
@@ -1207,7 +1207,7 @@ app.post('/api/auth/register', async (req, res) => {
 
       await connection.rollback();
 
-      return res.status(400).json({ error: 'Email  c ti khon ng nhp' });
+      return res.status(400).json({ error: 'Email da co tai khoan dang nhap' });
 
     }
 
@@ -1233,7 +1233,7 @@ app.post('/api/auth/register', async (req, res) => {
 
         await connection.rollback();
 
-        return res.status(404).json({ error: 'Khng tm thy h s nhn vin' });
+        return res.status(404).json({ error: 'Khong tim thay ho so nhan vien' });
 
       }
 
@@ -1257,7 +1257,7 @@ app.post('/api/auth/register', async (req, res) => {
 
       if (existingEmp.length === 0) {
 
-        const deptName = 'Mc nh';
+        const deptName = 'Mac dinh';
 
         await connection.query('INSERT IGNORE INTO departments (name) VALUES (?)', [deptName]);
 
@@ -1271,7 +1271,7 @@ app.post('/api/auth/register', async (req, res) => {
 
            (id, employeeCode, fullName, gender, email, phone, address, department, position, joinDate, salary, bonus, penalty, notes)
 
-           VALUES (?, ?, ?, 'Nam', ?, '', '', ?, 'Nhn vin', NOW(), 0.0, 0.0, 0.0, '')`,
+           VALUES (?, ?, ?, 'Nam', ?, '', '', ?, 'Nhan vien', NOW(), 0.0, 0.0, 0.0, '')`,
 
           [empId, empCode, fullName, normalizedEmail, deptName]
 
@@ -1305,7 +1305,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 
 
-// ng nhp ngi dng
+// Dang nhap nguoi dung
 
 app.post('/api/auth/login', async (req, res) => {
 
@@ -1313,7 +1313,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   if (!email || !password) {
 
-    return res.status(400).json({ error: 'Thiu email hoc mt khu' });
+    return res.status(400).json({ error: 'Thieu email hoac mat khau' });
 
   }
 
@@ -1323,7 +1323,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (rows.length === 0) {
 
-      return res.status(404).json({ error: 'Email cha c ng k trong h thng' });
+      return res.status(404).json({ error: 'Email chua duoc dang ky trong he thong' });
 
     }
 
@@ -1331,7 +1331,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (user.password !== password) {
 
-      return res.status(400).json({ error: 'Mt khu khng chnh xc' });
+      return res.status(400).json({ error: 'Mat khau khong chinh xac' });
 
     }
 
@@ -1349,7 +1349,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 
 
-// t li mt khu
+// Dat lai mat khau
 
 app.post('/api/auth/reset-password', async (req, res) => {
 
@@ -1357,7 +1357,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
   if (!email || !newPassword) {
 
-    return res.status(400).json({ error: 'Thiu thng tin t li mt khu' });
+    return res.status(400).json({ error: 'Thieu thong tin dat lai mat khau' });
 
   }
 
@@ -1367,13 +1367,13 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
     if (existing.length === 0) {
 
-      return res.status(404).json({ error: 'Email khng tn ti trong h thng' });
+      return res.status(404).json({ error: 'Email khong ton tai trong he thong' });
 
     }
 
     await db.query('UPDATE users SET password = ? WHERE email = ?', [newPassword, email]);
 
-    res.json({ success: true, message: 't li mt khu thnh cng!' });
+    res.json({ success: true, message: 'Dat lai mat khau thanh cong!' });
 
   } catch (error) {
 
@@ -1387,7 +1387,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 
 
-// Kim tra email tn ti
+// Kiem tra email ton tai
 
 app.get('/api/auth/check-email/:email', async (req, res) => {
 
@@ -1423,7 +1423,7 @@ const cloudinary = require('cloudinary').v2;
 
 
 
-// Cu hnh Cloudinary
+// Cau hinh Cloudinary
 
 cloudinary.config({
 
@@ -1437,7 +1437,7 @@ cloudinary.config({
 
 
 
-// Multer lu tm vo memory (khng lu disk)
+// Multer luu tam vao memory (khong luu disk)
 
 const upload = multer({
 
@@ -1449,7 +1449,7 @@ const upload = multer({
 
     if (file.mimetype.startsWith('image/')) cb(null, true);
 
-    else cb(new Error('Ch chp nhn file nh'));
+    else cb(new Error('Chi chap nhan file anh'));
 
   },
 
@@ -1457,7 +1457,7 @@ const upload = multer({
 
 
 
-// Upload buffer ln Cloudinary
+// Upload buffer len Cloudinary
 
 function uploadToCloudinary(buffer, folder = 'attendance') {
 
@@ -1489,17 +1489,17 @@ function uploadToCloudinary(buffer, folder = 'attendance') {
 
 
 
-// CHECK-IN bng nh
+// CHECK-IN bang anh
 
 app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => {
 
   try {
 
-    if (!req.file) return res.status(400).json({ error: 'Khng c file nh' });
+    if (!req.file) return res.status(400).json({ error: 'Khong co file anh' });
 
     const { employeeId } = req.body;
 
-    if (!employeeId) return res.status(400).json({ error: 'Thiu employeeId' });
+    if (!employeeId) return res.status(400).json({ error: 'Thieu employeeId' });
 
 
 
@@ -1569,17 +1569,17 @@ app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => 
 
 
 
-// CHECK-OUT bng nh
+// CHECK-OUT bang anh
 
 app.post('/api/attendance/checkout', upload.single('photo'), async (req, res) => {
 
   try {
 
-    if (!req.file) return res.status(400).json({ error: 'Khng c file nh' });
+    if (!req.file) return res.status(400).json({ error: 'Khong co file anh' });
 
     const { employeeId } = req.body;
 
-    if (!employeeId) return res.status(400).json({ error: 'Thiu employeeId' });
+    if (!employeeId) return res.status(400).json({ error: 'Thieu employeeId' });
 
 
 
@@ -1779,11 +1779,11 @@ app.post('/api/attendance/photo', upload.single('photo'), async (req, res) => {
 
   try {
 
-    if (!req.file) return res.status(400).json({ error: 'Khng c file nh' });
+    if (!req.file) return res.status(400).json({ error: 'Khong co file anh' });
 
     const { employeeId } = req.body;
 
-    if (!employeeId) return res.status(400).json({ error: 'Thiu employeeId' });
+    if (!employeeId) return res.status(400).json({ error: 'Thieu employeeId' });
 
 
 
