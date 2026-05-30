@@ -840,16 +840,21 @@ app.get('/api/attendance/status/:employeeId/:date', async (req, res) => {
     );
     if (rows.length > 0) {
       const row = rows[0];
-      const formatVN = (dt) => {
+      const formatTime = (dt) => {
         if (!dt) return null;
         if (typeof dt === 'string') return dt;
-        const vnDate = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
-        return vnDate.toISOString().replace('T', ' ').substring(0, 19);
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        const h = String(dt.getHours()).padStart(2, '0');
+        const min = String(dt.getMinutes()).padStart(2, '0');
+        const s = String(dt.getSeconds()).padStart(2, '0');
+        return `${y}-${m}-${d} ${h}:${min}:${s}`;
       };
       res.json({
         status: row.status,
-        checkin_time: formatVN(row.checkin_time),
-        checkout_time: formatVN(row.checkout_time),
+        checkin_time: formatTime(row.checkin_time),
+        checkout_time: formatTime(row.checkout_time),
         checkin_photo: row.checkin_photo,
         checkout_photo: row.checkout_photo,
       });
