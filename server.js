@@ -744,12 +744,19 @@ function getBaseUrl(req) {
 }
 
 function getVnDateParts(date = new Date()) {
-  const vn = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  // Railway server timezone có thể đã là VN, dùng local time trực tiếp
+  const now = date;
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const second = String(now.getSeconds()).padStart(2, '0');
   return {
-    dateKey: vn.toISOString().slice(0, 10),
-    dateTime: vn.toISOString().replace('T', ' ').substring(0, 19),
-    hour: vn.getUTCHours(),
-    minute: vn.getUTCMinutes(),
+    dateKey: `${year}-${month}-${day}`,
+    dateTime: `${year}-${month}-${day} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${second}`,
+    hour: hour,
+    minute: minute,
   };
 }
 
