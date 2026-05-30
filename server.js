@@ -1,6 +1,7 @@
-﻿const express = require('express');
+﻿﻿const express = require('express');
 const cors = require('cors');
 const db = require('./db');
+const { getVnDateParts } = require('./vntime');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -741,22 +742,7 @@ function uploadToCloudinary(buffer, folder = 'attendance') {
   });
 }
 
-function getVnDateParts(date = new Date()) {
-  // Railway server timezone cÃ³ thá»ƒ Ä‘Ã£ lÃ  VN, dÃ¹ng local time trá»±c tiáº¿p
-  const now = date;
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const second = String(now.getSeconds()).padStart(2, '0');
-  return {
-    dateKey: `${year}-${month}-${day}`,
-    dateTime: `${year}-${month}-${day} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${second}`,
-    hour: hour,
-    minute: minute,
-  };
-}
+// getVnDateParts moved to vntime.js
 
 // CHECK-IN báº±ng áº£nh
 app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => {
