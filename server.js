@@ -40,6 +40,7 @@ app.use(express.json());
       { name: 'checkin_photo', def: 'VARCHAR(500) DEFAULT NULL' },
 
       { name: 'checkout_photo', def: 'VARCHAR(500) DEFAULT NULL' },
+      { name: 'employee_name', def: 'VARCHAR(200) DEFAULT NULL' },
 
     ];
 
@@ -499,7 +500,7 @@ app.post('/api/notes', async (req, res) => {
 
     INSERT INTO work_notes (id, title, description, date, employeeId, department, completedByEmployee)
 
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT fullName FROM employees WHERE id = ? LIMIT 1))
 
     ON DUPLICATE KEY UPDATE
 
@@ -1515,7 +1516,7 @@ app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => 
 
     await db.query(
 
-      `INSERT INTO attendance (id, employeeId, date, status, checkin_time, checkin_photo, photo_url)
+      `INSERT INTO attendance (id, employeeId, date, status, checkin_time, checkin_photo, photo_url, employee_name)
 
        VALUES (?, ?, ?, ?, ?, ?, ?)
 
@@ -1527,9 +1528,10 @@ app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => 
 
          checkin_photo = VALUES(checkin_photo),
 
-         photo_url = VALUES(photo_url)`,
+         photo_url = VALUES(photo_url),
+         employee_name = VALUES(employee_name)`,
 
-      [attendanceId, employeeId, dateKey, status, dateTime, photoUrl, photoUrl]
+      [attendanceId, employeeId, dateKey, status, dateTime, photoUrl, photoUrl, employeeId]
 
     );
 
@@ -1623,9 +1625,9 @@ app.post('/api/attendance/checkout', upload.single('photo'), async (req, res) =>
 
       message: hour >= 16
 
-        ? `Check-out lc ${timeStr}  1 ngy cng `
+        ? `Check-out lc ${timeStr}  1 ngày công `
 
-        : `Check-out lc ${timeStr}  Na ngy cng `,
+        : `Check-out lc ${timeStr}  Nửa ngày công `,
 
     });
 
