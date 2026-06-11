@@ -500,7 +500,7 @@ app.post('/api/notes', async (req, res) => {
 
     INSERT INTO work_notes (id, title, description, date, employeeId, department, completedByEmployee)
 
-    VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT fullName FROM employees WHERE id = ? LIMIT 1))
+    VALUES (?, ?, ?, ?, ?, ?, ?)
 
     ON DUPLICATE KEY UPDATE
 
@@ -1516,7 +1516,7 @@ app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => 
 
     await db.query(
 
-      `INSERT INTO attendance (id, employeeId, date, status, checkin_time, checkin_photo, photo_url, employee_name)
+      `INSERT INTO attendance (id, employeeId, date, status, checkin_time, checkin_photo, photo_url)
 
        VALUES (?, ?, ?, ?, ?, ?, ?)
 
@@ -1528,10 +1528,9 @@ app.post('/api/attendance/checkin', upload.single('photo'), async (req, res) => 
 
          checkin_photo = VALUES(checkin_photo),
 
-         photo_url = VALUES(photo_url),
-         employee_name = VALUES(employee_name)`,
+         photo_url = VALUES(photo_url)`,
 
-      [attendanceId, employeeId, dateKey, status, dateTime, photoUrl, photoUrl, employeeId]
+      [attendanceId, employeeId, dateKey, status, dateTime, photoUrl, photoUrl]
 
     );
 
